@@ -6,8 +6,9 @@
     <title>Object Detection with OpenCV.js</title>
     <style>
         body { margin: 0; }
-        canvas { display: block; }
-        #video { display: none; }
+        #video, #canvas { display: block; }
+        #video { width: 100%; height: auto; }
+        #canvas { position: absolute; top: 0; left: 0; }
         button { margin: 10px; }
     </style>
 </head>
@@ -34,8 +35,8 @@
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
                 video = document.getElementById('video');
-                resizeCanvas();
                 window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
             };
         }
 
@@ -75,8 +76,8 @@
         }
 
         function resizeCanvas() {
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
+            canvas.width = video.clientWidth;
+            canvas.height = video.clientHeight;
         }
 
         function detectObjects() {
