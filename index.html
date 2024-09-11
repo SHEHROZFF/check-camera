@@ -19,6 +19,10 @@
       top: 0;
       left: 0;
     }
+
+    button {
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -28,30 +32,44 @@
     <video id="webcam" autoplay playsinline width="640" height="480"></video>
     <canvas id="canvas"></canvas>
   </div>
+  <button id="toggle-camera">Switch Camera</button>
 
   <script>
     let model;
+    let currentStream;
+    let frontCamera = true;
+
+    // Load the model
+    cocoSsd.load().then(loadedModel => {
+      model = loadedModel;
+      console.log("Model Loaded.");
+      startWebcam();
+    });
+
+    // Get the video and canvas elements
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
 
-    async function loadModel() {
-      try {
-        model = await cocoSsd.load();
-        console.log("Model Loaded.");
-        detectObjects(); // Start detection after model is loaded
-      } catch (err) {
-        console.error('Error loading model', err);
-      }
-    }
-
+    // Function to start video stream from the webcam
     function startWebcam() {
-      navigator.mediaDevices.getUserMedia({ video: true })
+      const constraints = {
+        video: {
+          facingMode: frontCamera ? 'user' : 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
         .then(stream => {
+          if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+          }
+          currentStream = stream;
           video.srcObject = stream;
           video.addEventListener('loadeddata', () => {
-            console.log('Video loaded');
-            detectObjects(); // Start detection after video is loaded
+            detectObjects();
           });
         })
         .catch(err => {
@@ -59,36 +77,34 @@
         });
     }
 
+    // Function to detect objects in the video stream
     function detectObjects() {
-      if (model) {
-        model.detect(video).then(predictions => {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+      model.detect(video).then(predictions => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          predictions.forEach(prediction => {
-            const [x, y, width, height] = prediction.bbox;
-            const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+        predictions.forEach(prediction => {
+          const [x, y, width, height] = prediction.bbox;
+          const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
 
-            ctx.strokeStyle = '#00FF00';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, width, height);
+          ctx.strokeStyle = '#00FF00';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(x, y, width, height);
 
-            ctx.font = '18px Arial';
-            ctx.fillStyle = '#00FF00';
-            ctx.fillText(text, x, y > 10 ? y - 5 : 10);
-          });
-
-          requestAnimationFrame(detectObjects);
-        }).catch(err => {
-          console.error('Error detecting objects', err);
+          ctx.font = '18px Arial';
+          ctx.fillStyle = '#00FF00';
+          ctx.fillText(text, x, y > 10 ? y - 5 : 10);
         });
-      } else {
-        console.log('Model not loaded yet');
-        setTimeout(detectObjects, 1000); // Retry after 1 second
-      }
+
+        requestAnimationFrame(detectObjects);
+      });
     }
 
-    loadModel(); // Load model when page loads
-    startWebcam(); // Start webcam when page loads
+    // Function to toggle the camera
+    document.getElementById('toggle-camera').addEventListener('click', () => {
+      frontCamera = !frontCamera;
+      startWebcam();
+    });
+
   </script>
   
 </body>
