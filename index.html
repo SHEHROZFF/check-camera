@@ -30,63 +30,65 @@
   </div>
 
   <script>
-    // Load the model
     let model;
-    cocoSsd.load().then(loadedModel => {
-      model = loadedModel;
-      console.log("Model Loaded.");
-    });
-
-    // Get the video and canvas elements
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Function to start video stream from the webcam
+    async function loadModel() {
+      try {
+        model = await cocoSsd.load();
+        console.log("Model Loaded.");
+        detectObjects(); // Start detection after model is loaded
+      } catch (err) {
+        console.error('Error loading model', err);
+      }
+    }
+
     function startWebcam() {
-      navigator.mediaDevices.getUserMedia({
-        video: true
-      })
-      .then(stream => {
-        video.srcObject = stream;
-        video.addEventListener('loadeddata', () => {
-          detectObjects();
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          video.srcObject = stream;
+          video.addEventListener('loadeddata', () => {
+            console.log('Video loaded');
+            detectObjects(); // Start detection after video is loaded
+          });
+        })
+        .catch(err => {
+          console.error('Error accessing the camera', err);
         });
-      })
-      .catch(err => {
-        console.error('Error accessing the camera', err);
-      });
     }
 
-    // Function to detect objects in the video stream
     function detectObjects() {
-      model.detect(video).then(predictions => {
-        // Clear the previous frame's drawing
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (model) {
+        model.detect(video).then(predictions => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw the bounding boxes for each detected object
-        predictions.forEach(prediction => {
-          const [x, y, width, height] = prediction.bbox;
-          const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+          predictions.forEach(prediction => {
+            const [x, y, width, height] = prediction.bbox;
+            const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
 
-          // Draw bounding box
-          ctx.strokeStyle = '#00FF00';
-          ctx.lineWidth = 4;
-          ctx.strokeRect(x, y, width, height);
+            ctx.strokeStyle = '#00FF00';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, width, height);
 
-          // Draw label
-          ctx.font = '18px Arial';
-          ctx.fillStyle = '#00FF00';
-          ctx.fillText(text, x, y > 10 ? y - 5 : 10);
+            ctx.font = '18px Arial';
+            ctx.fillStyle = '#00FF00';
+            ctx.fillText(text, x, y > 10 ? y - 5 : 10);
+          });
+
+          requestAnimationFrame(detectObjects);
+        }).catch(err => {
+          console.error('Error detecting objects', err);
         });
-
-        // Call detectObjects recursively to keep detecting
-        requestAnimationFrame(detectObjects);
-      });
+      } else {
+        console.log('Model not loaded yet');
+        setTimeout(detectObjects, 1000); // Retry after 1 second
+      }
     }
 
-    // Start the webcam when the page is loaded
-    startWebcam();
+    loadModel(); // Load model when page loads
+    startWebcam(); // Start webcam when page loads
   </script>
   
 </body>
