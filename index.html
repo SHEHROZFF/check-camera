@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Object Detection with OpenCV.js</title>
+    <title>Object Detection with TensorFlow.js</title>
     <style>
         body { margin: 0; display: flex; flex-direction: column; align-items: center; }
         #container { position: relative; width: 100%; max-width: 640px; }
@@ -22,32 +22,36 @@
         <canvas id="canvas"></canvas>
     </div>
 
-    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCVReady();" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        let canvas, ctx, video, streaming = false;
+        let video, canvas, ctx, model, streaming = false;
         let videoStream;
-        let currentCamera = 0; // 0 for back camera, 1 for front camera
+        let currentCamera = 0;
 
-        function onOpenCVReady() {
-            cv.onRuntimeInitialized = () => {
-                document.getElementById('startCamera').addEventListener('click', startCamera);
-                document.getElementById('stopCamera').addEventListener('click', stopCamera);
-                document.getElementById('switchCamera').addEventListener('click', switchCamera);
-                canvas = document.getElementById('canvas');
-                ctx = canvas.getContext('2d');
-                video = document.getElementById('video');
-                resizeCanvas();
-                window.addEventListener('resize', resizeCanvas);
-            };
+        async function setup() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            model = await cocoSsd.load();
+            document.getElementById('startCamera').addEventListener('click', startCamera);
+            document.getElementById('stopCamera').addEventListener('click', stopCamera);
+            document.getElementById('switchCamera').addEventListener('click', switchCamera);
+            
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
         }
 
         function resizeCanvas() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            if (video.videoWidth && video.videoHeight) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
         }
 
         function startCamera() {
-            if (streaming) return; // Prevent starting multiple streams
+            if (streaming) return;
             navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera === 0 ? 'environment' : 'user' } })
                 .then(stream => {
                     video.srcObject = stream;
@@ -59,9 +63,7 @@
                     });
                     streaming = true;
                 })
-                .catch(err => {
-                    console.error('Error accessing the camera', err);
-                });
+                .catch(err => console.error('Error accessing the camera', err));
         }
 
         function stopCamera() {
@@ -73,64 +75,35 @@
         }
 
         function switchCamera() {
-            currentCamera = (currentCamera === 0) ? 1 : 0; // Toggle between 0 and 1
+            currentCamera = (currentCamera === 0) ? 1 : 0;
             if (streaming) {
                 stopCamera();
                 startCamera();
             }
         }
 
-        function detectObjects() {
+        async function detectObjects() {
             if (!streaming) return;
 
-            let src = cv.imread(video);
-            let gray = new cv.Mat();
-            let thresh = new cv.Mat();
-            let contours = new cv.MatVector();
-            let hierarchy = new cv.Mat();
-
-            // Convert the image to grayscale
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-            // Apply threshold to separate objects from background
-            cv.threshold(gray, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
-
-            // Find contours
-            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-            // Clear canvas
+            const predictions = await model.detect(video);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Loop through contours
-            for (let i = 0; i < contours.size(); i++) {
-                let cnt = contours.get(i);
-                let area = cv.contourArea(cnt);
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                ctx.beginPath();
+                ctx.rect(x, y, width, height);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'green';
+                ctx.fillStyle = 'green';
+                ctx.stroke();
+                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+            });
 
-                // Draw bounding box
-                let rect = cv.boundingRect(cnt);
-                let pt1 = new cv.Point(rect.x, rect.y);
-                let pt2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
-                let color = new cv.Scalar(0, 255, 0, 255); // Green color
-                let thickness = 2;
-                cv.rectangle(src, pt1, pt2, color, thickness);
-
-                // Draw area text
-                let text = Math.round(area).toString();
-                let org = new cv.Point(rect.x, rect.y - 10);
-                let fontScale = 1;
-                let colorText = new cv.Scalar(0, 0, 255, 255); // Red color
-                cv.putText(src, text, org, cv.FONT_HERSHEY_SIMPLEX, fontScale, colorText, thickness, cv.LINE_AA);
-            }
-
-            // Show the result
-            cv.imshow(canvas, src);
-
-            // Cleanup
-            src.delete(); gray.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
-
-            // Call detectObjects recursively
             requestAnimationFrame(detectObjects);
         }
+
+        setup();
     </script>
 </body>
 </html>
