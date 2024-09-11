@@ -27,7 +27,7 @@
     <script>
         let video, canvas, ctx, model, streaming = false;
         let videoStream;
-        let currentCamera = 0;
+        let currentCamera = 0; // 0 for back camera, 1 for front camera
 
         async function setup() {
             video = document.getElementById('video');
@@ -97,7 +97,7 @@
                 ctx.strokeStyle = 'green';
                 ctx.fillStyle = 'green';
                 ctx.stroke();
-                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+                ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 10 : 10);
             });
 
             requestAnimationFrame(detectObjects);
