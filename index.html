@@ -6,8 +6,7 @@
     <title>Object Detection with OpenCV.js</title>
     <style>
         body { margin: 0; }
-        #video, #canvas { display: block; }
-        #video { width: 100%; height: auto; }
+        #video { display: block; width: 100%; height: auto; }
         #canvas { position: absolute; top: 0; left: 0; }
         button { margin: 10px; }
     </style>
@@ -36,7 +35,6 @@
                 ctx = canvas.getContext('2d');
                 video = document.getElementById('video');
                 window.addEventListener('resize', resizeCanvas);
-                resizeCanvas();
             };
         }
 
@@ -76,8 +74,10 @@
         }
 
         function resizeCanvas() {
-            canvas.width = video.clientWidth;
-            canvas.height = video.clientHeight;
+            if (video.videoWidth && video.videoHeight) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
         }
 
         function detectObjects() {
@@ -88,8 +88,6 @@
                 console.error('Error: Video frame is empty.');
                 return;
             }
-
-            console.log('Processing frame...');
 
             let gray = new cv.Mat();
             let thresh = new cv.Mat();
@@ -108,14 +106,10 @@
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Check number of contours found
-            console.log('Number of contours found:', contours.size());
-
             // Loop through contours
             for (let i = 0; i < contours.size(); i++) {
                 let cnt = contours.get(i);
                 let area = cv.contourArea(cnt);
-                console.log('Contour area:', area);
 
                 // Draw bounding box
                 let rect = cv.boundingRect(cnt);
