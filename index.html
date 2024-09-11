@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Object Detection with OpenCV.js</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; }
-        #container { position: relative; width: 100%; max-width: 640px; }
-        video, canvas { display: block; width: 100%; }
-        canvas { position: absolute; top: 0; left: 0; }
+        body { margin: 0; }
+        canvas { display: block; }
+        #video { display: none; }
         button { margin: 10px; }
     </style>
 </head>
@@ -17,10 +16,8 @@
     <button id="startCamera">Start Camera</button>
     <button id="stopCamera">Stop Camera</button>
     <button id="switchCamera">Switch Camera</button>
-    <div id="container">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas"></canvas>
-    </div>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
 
     <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCVReady();" type="text/javascript"></script>
     <script>
@@ -30,6 +27,7 @@
 
         function onOpenCVReady() {
             cv.onRuntimeInitialized = () => {
+                console.log('OpenCV.js is ready');
                 document.getElementById('startCamera').addEventListener('click', startCamera);
                 document.getElementById('stopCamera').addEventListener('click', stopCamera);
                 document.getElementById('switchCamera').addEventListener('click', switchCamera);
@@ -41,11 +39,6 @@
             };
         }
 
-        function resizeCanvas() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        }
-
         function startCamera() {
             if (streaming) return; // Prevent starting multiple streams
             navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera === 0 ? 'environment' : 'user' } })
@@ -55,6 +48,7 @@
                     video.play();
                     video.addEventListener('play', () => {
                         resizeCanvas();
+                        console.log('Video playing');
                         detectObjects();
                     });
                     streaming = true;
@@ -73,17 +67,29 @@
         }
 
         function switchCamera() {
-            currentCamera = (currentCamera === 0) ? 1 : 0; // Toggle between 0 and 1
+            currentCamera = (currentCamera === 0) ? 1 : 0;
             if (streaming) {
                 stopCamera();
                 startCamera();
             }
         }
 
+        function resizeCanvas() {
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+        }
+
         function detectObjects() {
             if (!streaming) return;
 
             let src = cv.imread(video);
+            if (src.empty()) {
+                console.error('Error: Video frame is empty.');
+                return;
+            }
+
+            console.log('Processing frame...');
+
             let gray = new cv.Mat();
             let thresh = new cv.Mat();
             let contours = new cv.MatVector();
@@ -101,10 +107,14 @@
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Check number of contours found
+            console.log('Number of contours found:', contours.size());
+
             // Loop through contours
             for (let i = 0; i < contours.size(); i++) {
                 let cnt = contours.get(i);
                 let area = cv.contourArea(cnt);
+                console.log('Contour area:', area);
 
                 // Draw bounding box
                 let rect = cv.boundingRect(cnt);
