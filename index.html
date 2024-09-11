@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Object Detection with OpenCV.js</title>
     <style>
-        body { margin: 0; }
-        #video { display: block; width: 100%; height: auto; }
-        #canvas { position: absolute; top: 0; left: 0; }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; }
+        #container { position: relative; width: 100%; max-width: 640px; }
+        video, canvas { display: block; width: 100%; }
+        canvas { position: absolute; top: 0; left: 0; }
         button { margin: 10px; }
     </style>
 </head>
@@ -16,8 +17,10 @@
     <button id="startCamera">Start Camera</button>
     <button id="stopCamera">Stop Camera</button>
     <button id="switchCamera">Switch Camera</button>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
+    <div id="container">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
 
     <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCVReady();" type="text/javascript"></script>
     <script>
@@ -27,15 +30,20 @@
 
         function onOpenCVReady() {
             cv.onRuntimeInitialized = () => {
-                console.log('OpenCV.js is ready');
                 document.getElementById('startCamera').addEventListener('click', startCamera);
                 document.getElementById('stopCamera').addEventListener('click', stopCamera);
                 document.getElementById('switchCamera').addEventListener('click', switchCamera);
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
                 video = document.getElementById('video');
+                resizeCanvas();
                 window.addEventListener('resize', resizeCanvas);
             };
+        }
+
+        function resizeCanvas() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
         }
 
         function startCamera() {
@@ -47,7 +55,6 @@
                     video.play();
                     video.addEventListener('play', () => {
                         resizeCanvas();
-                        console.log('Video playing');
                         detectObjects();
                     });
                     streaming = true;
@@ -66,17 +73,10 @@
         }
 
         function switchCamera() {
-            currentCamera = (currentCamera === 0) ? 1 : 0;
+            currentCamera = (currentCamera === 0) ? 1 : 0; // Toggle between 0 and 1
             if (streaming) {
                 stopCamera();
                 startCamera();
-            }
-        }
-
-        function resizeCanvas() {
-            if (video.videoWidth && video.videoHeight) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
             }
         }
 
@@ -84,11 +84,6 @@
             if (!streaming) return;
 
             let src = cv.imread(video);
-            if (src.empty()) {
-                console.error('Error: Video frame is empty.');
-                return;
-            }
-
             let gray = new cv.Mat();
             let thresh = new cv.Mat();
             let contours = new cv.MatVector();
