@@ -30,7 +30,14 @@
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
                 video = document.getElementById('video');
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
             };
+        }
+
+        function resizeCanvas() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
         }
 
         function startCamera() {
@@ -41,6 +48,7 @@
                     videoStream = stream;
                     video.play();
                     video.addEventListener('play', () => {
+                        resizeCanvas();
                         detectObjects();
                     });
                     streaming = true;
