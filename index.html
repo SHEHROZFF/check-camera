@@ -1,111 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Object Detection with TensorFlow.js</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-  <style>
-    #webcam {
-      position: relative;
-      width: 640px;
-      height: 480px;
-      border: 1px solid black;
-    }
-
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-
-    button {
-      margin-top: 10px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection with OpenCV.js</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #video { display: none; }
+        button { margin: 10px; }
+    </style>
 </head>
 <body>
-
-  <h1>Object Detection Using Webcam</h1>
-  <div id="webcam-container">
-    <video id="webcam" autoplay playsinline width="640" height="480"></video>
+    <h2>Object Detection with Camera</h2>
+    <button id="startCamera">Start Camera</button>
+    <button id="stopCamera">Stop Camera</button>
+    <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-  </div>
-  <button id="toggle-camera">Switch Camera</button>
 
-  <script>
-    let model;
-    let currentStream;
-    let frontCamera = true;
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCVReady();" type="text/javascript"></script>
+    <script>
+        let canvas, ctx, video, streaming = false;
+        let videoStream;
 
-    // Load the model
-    cocoSsd.load().then(loadedModel => {
-      model = loadedModel;
-      console.log("Model Loaded.");
-      startWebcam();
-    });
-
-    // Get the video and canvas elements
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-
-    // Function to start video stream from the webcam
-    function startWebcam() {
-      const constraints = {
-        video: {
-          facingMode: frontCamera ? 'user' : 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+        function onOpenCVReady() {
+            cv.onRuntimeInitialized = () => {
+                document.getElementById('startCamera').addEventListener('click', startCamera);
+                document.getElementById('stopCamera').addEventListener('click', stopCamera);
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                video = document.getElementById('video');
+            };
         }
-      };
 
-      navigator.mediaDevices.getUserMedia(constraints)
-        .then(stream => {
-          if (currentStream) {
-            currentStream.getTracks().forEach(track => track.stop());
-          }
-          currentStream = stream;
-          video.srcObject = stream;
-          video.addEventListener('loadeddata', () => {
-            detectObjects();
-          });
-        })
-        .catch(err => {
-          console.error('Error accessing the camera', err);
-        });
-    }
+        function startCamera() {
+            if (streaming) return; // Prevent starting multiple streams
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    videoStream = stream;
+                    video.play();
+                    video.addEventListener('play', () => {
+                        detectObjects();
+                    });
+                    streaming = true;
+                })
+                .catch(err => {
+                    console.error('Error accessing the camera', err);
+                });
+        }
 
-    // Function to detect objects in the video stream
-    function detectObjects() {
-      model.detect(video).then(predictions => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function stopCamera() {
+            if (!streaming) return;
+            let tracks = videoStream.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+            streaming = false;
+        }
 
-        predictions.forEach(prediction => {
-          const [x, y, width, height] = prediction.bbox;
-          const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+        function detectObjects() {
+            if (!streaming) return;
 
-          ctx.strokeStyle = '#00FF00';
-          ctx.lineWidth = 4;
-          ctx.strokeRect(x, y, width, height);
+            let src = cv.imread(video);
+            let gray = new cv.Mat();
+            let thresh = new cv.Mat();
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
 
-          ctx.font = '18px Arial';
-          ctx.fillStyle = '#00FF00';
-          ctx.fillText(text, x, y > 10 ? y - 5 : 10);
-        });
+            // Convert the image to grayscale
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-        requestAnimationFrame(detectObjects);
-      });
-    }
+            // Apply threshold to separate objects from background
+            cv.threshold(gray, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
 
-    // Function to toggle the camera
-    document.getElementById('toggle-camera').addEventListener('click', () => {
-      frontCamera = !frontCamera;
-      startWebcam();
-    });
+            // Find contours
+            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-  </script>
-  
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Loop through contours
+            for (let i = 0; i < contours.size(); i++) {
+                let cnt = contours.get(i);
+                let area = cv.contourArea(cnt);
+
+                // Draw bounding box
+                let rect = cv.boundingRect(cnt);
+                let pt1 = new cv.Point(rect.x, rect.y);
+                let pt2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
+                let color = new cv.Scalar(0, 255, 0, 255); // Green color
+                let thickness = 2;
+                cv.rectangle(src, pt1, pt2, color, thickness);
+
+                // Draw area text
+                let text = Math.round(area).toString();
+                let org = new cv.Point(rect.x, rect.y - 10);
+                let fontScale = 1;
+                let colorText = new cv.Scalar(0, 0, 255, 255); // Red color
+                cv.putText(src, text, org, cv.FONT_HERSHEY_SIMPLEX, fontScale, colorText, thickness, cv.LINE_AA);
+            }
+
+            // Show the result
+            cv.imshow(canvas, src);
+
+            // Cleanup
+            src.delete(); gray.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+
+            // Call detectObjects recursively
+            requestAnimationFrame(detectObjects);
+        }
+    </script>
 </body>
 </html>
