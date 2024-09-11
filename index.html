@@ -16,6 +16,7 @@
     <h2>Object Detection with Camera</h2>
     <button id="startCamera">Start Camera</button>
     <button id="stopCamera">Stop Camera</button>
+    <button id="switchCamera">Switch Camera</button>
     <div id="container">
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
@@ -25,11 +26,13 @@
     <script>
         let canvas, ctx, video, streaming = false;
         let videoStream;
+        let currentCamera = 0; // 0 for back camera, 1 for front camera
 
         function onOpenCVReady() {
             cv.onRuntimeInitialized = () => {
                 document.getElementById('startCamera').addEventListener('click', startCamera);
                 document.getElementById('stopCamera').addEventListener('click', stopCamera);
+                document.getElementById('switchCamera').addEventListener('click', switchCamera);
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
                 video = document.getElementById('video');
@@ -45,7 +48,7 @@
 
         function startCamera() {
             if (streaming) return; // Prevent starting multiple streams
-            navigator.mediaDevices.getUserMedia({ video: true })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera === 0 ? 'environment' : 'user' } })
                 .then(stream => {
                     video.srcObject = stream;
                     videoStream = stream;
@@ -67,6 +70,14 @@
             tracks.forEach(track => track.stop());
             video.srcObject = null;
             streaming = false;
+        }
+
+        function switchCamera() {
+            currentCamera = (currentCamera === 0) ? 1 : 0; // Toggle between 0 and 1
+            if (streaming) {
+                stopCamera();
+                startCamera();
+            }
         }
 
         function detectObjects() {
