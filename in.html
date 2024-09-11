@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Object Detection with TensorFlow.js</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    #webcam {
+      position: relative;
+      width: 640px;
+      height: 480px;
+      border: 1px solid black;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Object Detection Using Webcam</h1>
+  <div id="webcam-container">
+    <video id="webcam" autoplay playsinline width="640" height="480"></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    // Load the model
+    let model;
+    cocoSsd.load().then(loadedModel => {
+      model = loadedModel;
+      console.log("Model Loaded.");
+    });
+
+    // Get the video and canvas elements
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Function to start video stream from the webcam
+    function startWebcam() {
+      navigator.mediaDevices.getUserMedia({
+        video: true
+      })
+      .then(stream => {
+        video.srcObject = stream;
+        video.addEventListener('loadeddata', () => {
+          detectObjects();
+        });
+      })
+      .catch(err => {
+        console.error('Error accessing the camera', err);
+      });
+    }
+
+    // Function to detect objects in the video stream
+    function detectObjects() {
+      model.detect(video).then(predictions => {
+        // Clear the previous frame's drawing
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw the bounding boxes for each detected object
+        predictions.forEach(prediction => {
+          const [x, y, width, height] = prediction.bbox;
+          const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+
+          // Draw bounding box
+          ctx.strokeStyle = '#00FF00';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(x, y, width, height);
+
+          // Draw label
+          ctx.font = '18px Arial';
+          ctx.fillStyle = '#00FF00';
+          ctx.fillText(text, x, y > 10 ? y - 5 : 10);
+        });
+
+        // Call detectObjects recursively to keep detecting
+        requestAnimationFrame(detectObjects);
+      });
+    }
+
+    // Start the webcam when the page is loaded
+    startWebcam();
+  </script>
+  
+</body>
+</html>
