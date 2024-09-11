@@ -5,63 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Object Detection with OpenCV.js</title>
     <style>
-        body { margin: 0; }
-        canvas { display: block; }
-        #video { display: none; }
-        button { margin: 10px; }
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        h2 {
+            margin: 20px;
+        }
+        #canvas {
+            border: 1px solid #ccc;
+        }
+        input[type="file"] {
+            margin: 10px;
+            padding: 5px;
+            font-size: 16px;
+        }
+        @media (max-width: 600px) {
+            #canvas {
+                width: 100%;
+                height: auto;
+            }
+        }
     </style>
 </head>
 <body>
-    <h2>Object Detection with Camera</h2>
-    <button id="startCamera">Start Camera</button>
-    <button id="stopCamera">Stop Camera</button>
-    <video id="video" autoplay playsinline></video>
+    <h2>Upload Image for Object Detection</h2>
+    <input type="file" id="imageInput" accept="image/*">
     <canvas id="canvas"></canvas>
 
     <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCVReady();" type="text/javascript"></script>
     <script>
-        let canvas, ctx, video, streaming = false;
-        let videoStream;
+        let canvas, ctx;
 
         function onOpenCVReady() {
             cv.onRuntimeInitialized = () => {
-                document.getElementById('startCamera').addEventListener('click', startCamera);
-                document.getElementById('stopCamera').addEventListener('click', stopCamera);
+                document.getElementById('imageInput').addEventListener('change', handleImageUpload);
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
-                video = document.getElementById('video');
+                // Adjust canvas size on window resize
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
             };
         }
 
-        function startCamera() {
-            if (streaming) return; // Prevent starting multiple streams
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => {
-                    video.srcObject = stream;
-                    videoStream = stream;
-                    video.play();
-                    video.addEventListener('play', () => {
-                        detectObjects();
-                    });
-                    streaming = true;
-                })
-                .catch(err => {
-                    console.error('Error accessing the camera', err);
-                });
+        function handleImageUpload(event) {
+            let file = event.target.files[0];
+            if (!file) return;
+
+            let reader = new FileReader();
+            reader.onload = function (e) {
+                let imgElement = new Image();
+                imgElement.onload = function () {
+                    canvas.width = imgElement.width;
+                    canvas.height = imgElement.height;
+                    ctx.drawImage(imgElement, 0, 0, imgElement.width, imgElement.height);
+                    processImage();
+                };
+                imgElement.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
 
-        function stopCamera() {
-            if (!streaming) return;
-            let tracks = videoStream.getTracks();
-            tracks.forEach(track => track.stop());
-            video.srcObject = null;
-            streaming = false;
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * 0.9; // Adjust width based on screen size
+            canvas.height = canvas.width * 0.75; // Maintain aspect ratio
         }
 
-        function detectObjects() {
-            if (!streaming) return;
-
-            let src = cv.imread(video);
+        function processImage() {
+            let src = cv.imread(canvas);
             let gray = new cv.Mat();
             let thresh = new cv.Mat();
             let contours = new cv.MatVector();
@@ -75,9 +92,6 @@
 
             // Find contours
             cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Loop through contours
             for (let i = 0; i < contours.size(); i++) {
@@ -105,9 +119,6 @@
 
             // Cleanup
             src.delete(); gray.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
-
-            // Call detectObjects recursively
-            requestAnimationFrame(detectObjects);
         }
     </script>
 </body>
