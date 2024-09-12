@@ -5,29 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Object Detection with TensorFlow.js</title>
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        video, canvas { position: absolute; top: 0; left: 0; }
-        canvas { z-index: 1; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        #videoContainer {
+            position: relative;
+            display: inline-block;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            pointer-events: none;
+        }
+        #status {
+            margin-top: 20px;
+        }
+        #cameraSelector {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <video id="video" width="640" height="480" autoplay playsinline muted></video>
-    <canvas id="canvas" width="640" height="480"></canvas>
+    <h1>Object Detection with Webcam</h1>
+    <div id="videoContainer">
+        <video id="videoElement" autoplay></video>
+        <canvas id="canvas"></canvas>
+    </div>
+    <div id="status">Loading model...</div>
+    <div id="cameraSelector">
+        <label for="cameraSelect">Select Camera:</label>
+        <select id="cameraSelect"></select>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        const video = document.getElementById('video');
+        const videoElement = document.getElementById('videoElement');
         const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        let model;
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        const cameraSelect = document.getElementById('cameraSelect');
 
-        async function setupCamera() {
+        let model;
+        let currentStream;
+
+        async function setupCamera(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }  // Use back camera
+                video: { deviceId: { exact: deviceId } }
             });
-            video.srcObject = stream;
-            return new Promise(resolve => {
-                video.onloadedmetadata = () => {
+            videoElement.srcObject = stream;
+            currentStream = stream;
+            return new Promise((resolve) => {
+                videoElement.onloadedmetadata = () => {
                     resolve();
                 };
             });
@@ -35,40 +77,61 @@
 
         async function loadModel() {
             model = await cocoSsd.load();
-            console.log('Model loaded.');
-            detectObjects();
+            statusDiv.textContent = 'Model loaded. Starting detection...';
         }
 
         async function detectObjects() {
-            const predictions = await model.detect(video);
-
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            predictions.forEach(prediction => {
-                // Draw bounding box
-                context.beginPath();
-                context.rect(...prediction.bbox);
-                context.lineWidth = 2;
-                context.strokeStyle = 'red';
-                context.fillStyle = 'red';
-                context.stroke();
-                context.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, prediction.bbox[0], prediction.bbox[1] > 10 ? prediction.bbox[1] - 10 : 10);
-                
-                // Draw object dimensions
-                const [x, y, width, height] = prediction.bbox;
-                const displayWidth = Math.round(width);
-                const displayHeight = Math.round(height);
-                context.fillText(`W: ${displayWidth}px, H: ${displayHeight}px`, x, y > 10 ? y - 20 : 20);
-            });
-
+            const predictions = await model.detect(videoElement);
+            drawPredictions(predictions);
             requestAnimationFrame(detectObjects);
         }
 
-        async function main() {
-            await setupCamera();
-            await loadModel();
+        function drawPredictions(predictions) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                ctx.beginPath();
+                ctx.rect(x, y, width, height);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'red';
+                ctx.fillStyle = 'red';
+                ctx.stroke();
+                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+            });
         }
 
-        main();
+        async function init() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
+            });
+
+            cameraSelect.addEventListener('change', async () => {
+                await setupCamera(cameraSelect.value);
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                detectObjects();
+            });
+
+            if (videoDevices.length > 0) {
+                await setupCamera(videoDevices[0].deviceId);
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                await loadModel();
+                detectObjects();
+            } else {
+                statusDiv.textContent = 'No cameras found.';
+            }
+        }
+
+        init();
     </script>
 </body>
 </html>
