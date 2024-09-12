@@ -30,6 +30,9 @@
         #status {
             margin-top: 20px;
         }
+        #cameraSelector {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -39,6 +42,10 @@
         <canvas id="canvas"></canvas>
     </div>
     <div id="status">Loading model...</div>
+    <div id="cameraSelector">
+        <label for="cameraSelect">Select Camera:</label>
+        <select id="cameraSelect"></select>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
@@ -47,12 +54,20 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const statusDiv = document.getElementById('status');
+        const cameraSelect = document.getElementById('cameraSelect');
 
         let model;
+        let currentStream;
 
-        async function setupCamera() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        async function setupCamera(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: deviceId } }
+            });
             videoElement.srcObject = stream;
+            currentStream = stream;
             return new Promise((resolve) => {
                 videoElement.onloadedmetadata = () => {
                     resolve();
@@ -88,11 +103,32 @@
         }
 
         async function init() {
-            await setupCamera();
-            canvas.width = videoElement.videoWidth;
-            canvas.height = videoElement.videoHeight;
-            await loadModel();
-            detectObjects();
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
+            });
+
+            cameraSelect.addEventListener('change', async () => {
+                await setupCamera(cameraSelect.value);
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                detectObjects();
+            });
+
+            if (videoDevices.length > 0) {
+                await setupCamera(videoDevices[0].deviceId);
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                await loadModel();
+                detectObjects();
+            } else {
+                statusDiv.textContent = 'No cameras found.';
+            }
         }
 
         init();
