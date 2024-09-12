@@ -5,105 +5,97 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Object Detection with TensorFlow.js</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; }
-        #container { position: relative; width: 100%; max-width: 640px; }
-        video, canvas { display: block; width: 100%; }
-        canvas { position: absolute; top: 0; left: 0; }
-        button { margin: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        #videoContainer {
+            position: relative;
+            display: inline-block;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            pointer-events: none;
+        }
+        #status {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <h2>Object Detection with Camera</h2>
-    <button id="startCamera">Start Camera</button>
-    <button id="stopCamera">Stop Camera</button>
-    <button id="switchCamera">Switch Camera</button>
-    <div id="container">
-        <video id="video" autoplay playsinline></video>
+    <h1>Object Detection with Webcam</h1>
+    <div id="videoContainer">
+        <video id="videoElement" autoplay></video>
         <canvas id="canvas"></canvas>
     </div>
+    <div id="status">Loading model...</div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        let video, canvas, ctx, model, streaming = false;
-        let videoStream;
-        let currentCamera = 0; // 0 for back camera, 1 for front camera
+        const videoElement = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
 
-        async function setup() {
-            video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
-            
+        let model;
+
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            videoElement.srcObject = stream;
+            return new Promise((resolve) => {
+                videoElement.onloadedmetadata = () => {
+                    resolve();
+                };
+            });
+        }
+
+        async function loadModel() {
             model = await cocoSsd.load();
-            document.getElementById('startCamera').addEventListener('click', startCamera);
-            document.getElementById('stopCamera').addEventListener('click', stopCamera);
-            document.getElementById('switchCamera').addEventListener('click', switchCamera);
-            
-            window.addEventListener('resize', resizeCanvas);
-            resizeCanvas();
-        }
-
-        function resizeCanvas() {
-            if (video.videoWidth && video.videoHeight) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
-        }
-
-        function startCamera() {
-            if (streaming) return;
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera === 0 ? 'environment' : 'user' } })
-                .then(stream => {
-                    video.srcObject = stream;
-                    videoStream = stream;
-                    video.play();
-                    video.addEventListener('play', () => {
-                        resizeCanvas();
-                        detectObjects();
-                    });
-                    streaming = true;
-                })
-                .catch(err => console.error('Error accessing the camera', err));
-        }
-
-        function stopCamera() {
-            if (!streaming) return;
-            let tracks = videoStream.getTracks();
-            tracks.forEach(track => track.stop());
-            video.srcObject = null;
-            streaming = false;
-        }
-
-        function switchCamera() {
-            currentCamera = (currentCamera === 0) ? 1 : 0;
-            if (streaming) {
-                stopCamera();
-                startCamera();
-            }
+            statusDiv.textContent = 'Model loaded. Starting detection...';
         }
 
         async function detectObjects() {
-            if (!streaming) return;
+            const predictions = await model.detect(videoElement);
+            drawPredictions(predictions);
+            requestAnimationFrame(detectObjects);
+        }
 
-            const predictions = await model.detect(video);
+        function drawPredictions(predictions) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
             predictions.forEach(prediction => {
                 const [x, y, width, height] = prediction.bbox;
                 ctx.beginPath();
                 ctx.rect(x, y, width, height);
                 ctx.lineWidth = 2;
-                ctx.strokeStyle = 'green';
-                ctx.fillStyle = 'green';
+                ctx.strokeStyle = 'red';
+                ctx.fillStyle = 'red';
                 ctx.stroke();
-                ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 10 : 10);
+                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
             });
-
-            requestAnimationFrame(detectObjects);
         }
 
-        setup();
+        async function init() {
+            await setupCamera();
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            await loadModel();
+            detectObjects();
+        }
+
+        init();
     </script>
 </body>
 </html>
